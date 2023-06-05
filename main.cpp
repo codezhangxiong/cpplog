@@ -3,6 +3,8 @@
 
 int main(int argc, char* argv[])
 {
+	//printf("this is git test!");
+
 	if (Log::get_instance()->init() == false)
 	{
 		printf("log init fail!\n");
