@@ -1,11 +1,16 @@
 #include <stdio.h>
 #include "log.h"
+#include <unistd.h>
 
 int main(int argc, char* argv[])
 {
-	//printf("this is git test!");
-	//printf("this is git test!");
+	setbuf(stdout, NULL);
 
+	char cwd[512] = { 0 };
+	getcwd(cwd,sizeof(cwd));
+	printf("run path: %s\n", cwd);
+
+	//使用log时，需要初始化
 	if (Log::get_instance()->init() == false)
 	{
 		printf("log init fail!\n");

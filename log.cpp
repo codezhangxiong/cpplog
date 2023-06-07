@@ -37,52 +37,76 @@ bool Log::init()
 }
 
 //异步需要设置阻塞队列的长度，同步不需要设置
-bool Log::init(const char *file_name, int close_log, int log_buf_size, int split_lines, int max_queue_size)
+bool Log::init(const char* file_name, int close_log, int log_buf_size, int split_lines, int max_queue_size)
 {
-    //如果设置了max_queue_size,则设置为异步
-    if (max_queue_size >= 1)
+	if (max_queue_size >= 1) //异步
+	{
+		m_is_async = true;
+		m_log_queue = new block_queue<string>(max_queue_size);
+		pthread_t tid;
+		//flush_log_thread为回调函数,这里表示创建线程异步写日志
+		pthread_create(&tid, NULL, flush_log_thread, NULL);
+	}
+
+	m_close_log = close_log;
+	m_log_buf_size = log_buf_size;
+	m_buf = new char[m_log_buf_size];
+	memset(m_buf, '\0', m_log_buf_size);
+	m_split_lines = split_lines;
+
+	time_t t = time(NULL);
+	struct tm* sys_tm = localtime(&t);
+	struct tm my_tm = *sys_tm;
+	m_today = my_tm.tm_mday;
+
+	//设置带日期的日志名
+	const char* p = strrchr(file_name, '/');
+	if (p == NULL)//没有指定目录的情况
+	{
+		strcpy(log_name, file_name);
+		memset(dir_name, '\0', sizeof(dir_name));
+	}
+	else
+	{
+		strcpy(log_name, p + 1);
+		strncpy(dir_name, file_name, p - file_name + 1);
+	}
+
+	char log_name_temp[256] = { 0 };
+	char log_full_name[256] = { 0 };
+	int num = 0;  //有多个日志文件时，文件后缀序号
+	char log_name_suffix[8] = { 0 };
+
+	snprintf(log_name_temp, 255, "%s%d_%02d_%02d_%s", dir_name, my_tm.tm_year + 1900, my_tm.tm_mon + 1, my_tm.tm_mday, log_name);
+	strcpy(log_full_name, log_name_temp);
+
+	while (!access(log_name_temp, F_OK)) //循环判断应该打开的日志文件
+	{
+		strcpy(log_full_name, log_name_temp);
+		sprintf(log_name_suffix, ".%d", ++num);
+		snprintf(log_name_temp, 255, "%s%d_%02d_%02d_%s%s", dir_name, my_tm.tm_year + 1900, my_tm.tm_mon + 1, my_tm.tm_mday, log_name, log_name_suffix);
+	}
+
+	m_fp = fopen(log_full_name, "a+");
+	if (m_fp == NULL)
+	{
+		return false;
+	}
+
+	//统计原日志中的行数
+    if (num > 0)
     {
-        m_is_async = true;
-        m_log_queue = new block_queue<string>(max_queue_size);
-        pthread_t tid;
-        //flush_log_thread为回调函数,这里表示创建线程异步写日志
-        pthread_create(&tid, NULL, flush_log_thread, NULL);
-    }
-    
-    m_close_log = close_log;
-    m_log_buf_size = log_buf_size;
-    m_buf = new char[m_log_buf_size];
-    memset(m_buf, '\0', m_log_buf_size);
-    m_split_lines = split_lines;
+        m_count = m_split_lines * (num - 1);
 
-    time_t t = time(NULL);
-    struct tm *sys_tm = localtime(&t);
-    struct tm my_tm = *sys_tm;
-
- 
-    const char *p = strrchr(file_name, '/');
-    char log_full_name[256] = {0};
-
-    if (p == NULL)
-    {
-        snprintf(log_full_name, 255, "%d_%02d_%02d_%s", my_tm.tm_year + 1900, my_tm.tm_mon + 1, my_tm.tm_mday, file_name);
-    }
-    else
-    {
-        strcpy(log_name, p + 1);
-        strncpy(dir_name, file_name, p - file_name + 1);
-        snprintf(log_full_name, 255, "%s%d_%02d_%02d_%s", dir_name, my_tm.tm_year + 1900, my_tm.tm_mon + 1, my_tm.tm_mday, log_name);
+        while (true)
+        {
+            int c = fgetc(m_fp);
+            if ('\n' == c) m_count++;
+            else if (EOF == c) break;
+        }
     }
 
-    m_today = my_tm.tm_mday;
-    
-    m_fp = fopen(log_full_name, "a");
-    if (m_fp == NULL)
-    {
-        return false;
-    }
-
-    return true;
+	return true;
 }
 
 void Log::write_log(int level, const char* fname, int line, const char* format, ...)
@@ -115,9 +139,9 @@ void Log::write_log(int level, const char* fname, int line, const char* format, 
     m_mutex.lock();
     m_count++;
 
-    if (m_today != my_tm.tm_mday || m_count % m_split_lines == 0) //everyday log
+    //需要新建日志的情况（1.非当日的日志、2.超过最大行数）
+    if (m_today != my_tm.tm_mday || m_count % m_split_lines == 0)
     {
-        
         char new_log[256] = {0};
         fflush(m_fp);
         fclose(m_fp);

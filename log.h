@@ -376,8 +376,8 @@ private:
 };
 
 #define LOG_DEBUG(format, ...) {Log::get_instance()->write_log(0, __FILE__, __LINE__, format, ##__VA_ARGS__); Log::get_instance()->flush();}
-#define LOG_INFO(format, ...) {Log::get_instance()->write_log(1, __FILE__, __LINE__, format, ##__VA_ARGS__); Log::get_instance()->flush();}
-#define LOG_WARN(format, ...) {Log::get_instance()->write_log(2, __FILE__, __LINE__, format, ##__VA_ARGS__); Log::get_instance()->flush();}
+#define LOG_INFO(format, ...)  {Log::get_instance()->write_log(1, __FILE__, __LINE__, format, ##__VA_ARGS__); Log::get_instance()->flush();}
+#define LOG_WARN(format, ...)  {Log::get_instance()->write_log(2, __FILE__, __LINE__, format, ##__VA_ARGS__); Log::get_instance()->flush();}
 #define LOG_ERROR(format, ...) {Log::get_instance()->write_log(3, __FILE__, __LINE__, format, ##__VA_ARGS__); Log::get_instance()->flush();}
 
 #endif
